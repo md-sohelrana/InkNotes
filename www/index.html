@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Inkwell Notes</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -21,8 +21,8 @@ button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 input[type=range]{width:90px}
 input[type=color]{width:34px;height:34px;border:0;padding:0;background:none}
 .sp{width:1px;height:26px;background:var(--bd);margin:0 4px}
-#wrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
-#cv{display:block;margin:12px auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.25);touch-action:none}
+#wrap{flex:1;position:relative;overflow:hidden;touch-action:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#zs{width:130px}#zl{min-width:44px;display:inline-block;text-align:center}.pt{font-size:12px;opacity:.65}#zb{display:inline-flex;align-items:center;gap:6px}
 #libv{position:fixed;inset:0;z-index:5;background:var(--bg);overflow:auto;padding-top:env(safe-area-inset-top,0px)}.nb{display:flex;gap:8px;align-items:center;padding:12px 14px;margin:6px 14px;background:var(--bar);border:1px solid var(--bd);border-radius:12px}.nb.cur{border-color:var(--ac)}#q{flex:1;min-width:120px;font:inherit;padding:8px 12px;border-radius:10px;border:1px solid var(--bd);background:transparent;color:var(--fg)}
 #toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 14px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none}
 </style></head><body>
@@ -34,7 +34,7 @@ input[type=color]{width:34px;height:34px;border:0;padding:0;background:none}
 <span id="sws"></span><input type="color" id="cc" value="#1c1c1e">
 <input type="range" id="sz" min="1" max="14" value="3" aria-label="Size">
 <span class="sp"></span>
-<button id="un">↶</button><button id="re">↷</button><button id="zo">−</button><button id="zi">+</button>
+<button id="un">↶</button><button id="re">↷</button><span id="zb"><button data-z="1">1×</button><button data-z="2">2×</button><button data-z="3">3×</button><input type="range" id="zs" min="0.5" max="4" step="0.05" value="1" aria-label="Zoom"><span id="zl">1×</span></span><button id="hs" title="Hold pen still to snap to a straight line">📏 Snap</button><span id="pt" class="pt"></span>
 <button id="po" class="on" title="Finger scrolls, Pencil draws">✋ Pencil only</button>
 <button id="sh">⤴ Share</button><span id="selb" hidden><span class="sp"></span><button id="sd">Duplicate</button><button id="sx">Delete</button><button id="sc">Recolor</button></span>
 </div>
@@ -48,7 +48,7 @@ input[type=color]{width:34px;height:34px;border:0;padding:0;background:none}
 <div id="libv" hidden><div class="bar"><b>Library</b><input id="q" placeholder="Search names & text"><button id="nn">＋ Notebook</button><button id="xl">Close</button></div><div id="ll"></div></div><div id="toast"></div>
 <script>
 const W=900,$=id=>document.getElementById(id);let H=1273;var bgc=new Map();
-const cv=$('cv'),cx=cv.getContext('2d'),wrap=$('wrap');
+const cv=$('cv'),cvx=cv.getContext('2d'),wrap=$('wrap'),baseC=document.createElement('canvas'),bx=baseC.getContext('2d');let cx=cvx,dirty=true,EXP=false;var view={x:0,y:12};
 let L=[],cid=null,D=null;
 try{L=JSON.parse(localStorage.getItem('inkwell-lib'))||[]}catch(e){}
 function ld(id){try{return JSON.parse(localStorage.getItem('inkwell-nb-'+id))}catch(e){return null}}
@@ -60,8 +60,16 @@ let tool='pen',color='#1c1c1e',size=3,penOnly=true,cur=null,undo=[],redo=[],er=f
 const imgs=new Map(),pg=()=>D.pages[D.i];
 function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,1800)}
 function save(){clearTimeout(save.t);save.t=setTimeout(()=>{try{flush()}catch(e){toast('Storage full – remove images')}},400)}
-function fit(){H=pg().h||1273;const w=Math.min(wrap.clientWidth-24,W)*Z,h=w*H/W,d=window.devicePixelRatio||1;
-cv.style.width=w+'px';cv.style.height=h+'px';cv.width=w*d;cv.height=h*d;draw()}
+const dpr=()=>window.devicePixelRatio||1,base=()=>Math.max(.2,Math.min(wrap.clientWidth-24,W)/W),sc=()=>base()*Z;
+let raf=0;const rp=()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=0;paint()})};
+function clampView(){const s=sc(),vw=wrap.clientWidth,vh=wrap.clientHeight,pw=W*s,ph=H*s,m=40;
+view.x=pw+2*m<=vw?(vw-pw)/2:Math.min(m,Math.max(vw-pw-m,view.x));view.y=ph+2*m<=vh?(vh-ph)/2:Math.min(m,Math.max(vh-ph-m,view.y))}
+function fit(reset){H=pg().h||1273;const d=dpr(),vw=wrap.clientWidth,vh=wrap.clientHeight;if(!vw||!vh)return;cv.width=Math.round(vw*d);cv.height=Math.round(vh*d);
+if(reset){view.x=(vw-W*sc())/2;view.y=12}clampView();draw();zui()}
+function zui(){$('zs').value=Z;$('zl').textContent=(Math.round(Z*100)/100)+'×';document.querySelectorAll('[data-z]').forEach(b=>b.classList.toggle('on',Math.abs(+b.dataset.z-Z)<.01))}
+function zoomTo(z,px,py){z=Math.max(.5,Math.min(4,z));const r=wrap.getBoundingClientRect();if(px===undefined){px=r.width/2;py=r.height/2}else{px-=r.left;py-=r.top}
+const s0=sc(),gx=(px-view.x)/s0,gy=(py-view.y)/s0;Z=z;const s=sc();view.x=px-gx*s;view.y=py-gy*s;clampView();dirty=true;rp();zui()}
+
 function bgDraw(t){cx.strokeStyle='#c8d4e6';cx.fillStyle='#c8d4e6';cx.lineWidth=1;cx.beginPath();
 if(t==='lined'){for(let y=100;y<H;y+=36){cx.moveTo(0,y);cx.lineTo(W,y)}cx.stroke();cx.strokeStyle='#f0a5a5';cx.beginPath();cx.moveTo(80,0);cx.lineTo(80,H);cx.stroke()}
 else if(t==='grid'){for(let y=0;y<H;y+=30){cx.moveTo(0,y);cx.lineTo(W,y)}for(let x=0;x<W;x+=30){cx.moveTo(x,0);cx.lineTo(x,H)}cx.stroke()}
@@ -78,39 +86,60 @@ if(s.t==='line'){cx.moveTo(a[0],a[1]);cx.lineTo(b[0],b[1])}
 else if(s.t==='rect')cx.rect(a[0],a[1],b[0]-a[0],b[1]-a[1]);
 else cx.ellipse((a[0]+b[0])/2,(a[1]+b[1])/2,Math.abs(b[0]-a[0])/2,Math.abs(b[1]-a[1])/2,0,0,7);cx.stroke()}
 cx.restore()}
-function draw(){const k=cv.width/W;cx.setTransform(k,0,0,k,0,0);cx.fillStyle=pg().pc||'#fff';cx.fillRect(0,0,W,H);if(pg().pdf){const b=bgc.get(pg().pdf);if(b&&b.complete)cx.drawImage(b,0,0,W,H);else if(typeof loadBg==='function')loadBg(pg().pdf)}else bgDraw(pg().bg);pg().s.forEach(one);if(cur&&cur.t!=='lasso')one(cur);drawSel();
-$('pn').textContent=`${D.i+1} / ${D.pages.length}`;$('bg').value=pg().bg;$('pc').value=pg().pc||'#ffffff';$('selb').hidden=!sel.length}
-function pos(e){const r=cv.getBoundingClientRect();const f=v=>Math.round(v*10)/10;return[f((e.clientX-r.left)*W/r.width),f((e.clientY-r.top)*W/r.width),Math.round((e.pressure||.5)*100)/100]}
+function paint(){if(baseC.width!==cv.width||baseC.height!==cv.height){baseC.width=cv.width;baseC.height=cv.height;dirty=true}
+const d=dpr(),k=EXP?cv.width/W:d*sc(),ox=EXP?0:d*view.x,oy=EXP?0:d*view.y;
+if(dirty){cx=bx;bx.setTransform(1,0,0,1,0,0);bx.clearRect(0,0,baseC.width,baseC.height);bx.setTransform(k,0,0,k,ox,oy);
+if(!EXP){bx.save();bx.shadowColor='rgba(0,0,0,.3)';bx.shadowBlur=14;bx.fillStyle='#fff';bx.fillRect(0,0,W,H);bx.restore()}
+bx.fillStyle=pg().pc||'#fff';bx.fillRect(0,0,W,H);
+if(pg().pdf){const b=bgc.get(pg().pdf);if(b&&b.complete)bx.drawImage(b,0,0,W,H);else if(typeof loadBg==='function')loadBg(pg().pdf)}else bgDraw(pg().bg);
+pg().s.forEach(one);cx=cvx;dirty=false}
+cvx.setTransform(1,0,0,1,0,0);cvx.clearRect(0,0,cv.width,cv.height);cvx.drawImage(baseC,0,0);
+if(!EXP){cvx.setTransform(k,0,0,k,ox,oy);if(cur&&cur.t!=='lasso')one(cur);drawSel()}}
+function draw(){dirty=true;paint();$('pn').textContent=`${D.i+1} / ${D.pages.length}`;$('bg').value=pg().bg;$('pc').value=pg().pc||'#ffffff';$('selb').hidden=!sel.length}
+
+function pos(e){const r=cv.getBoundingClientRect(),s=sc(),f=v=>Math.round(v*10)/10;return[f((e.clientX-r.left-view.x)/s),f((e.clientY-r.top-view.y)/s),Math.round((e.pressure||.5)*100)/100]}
 function snap(){undo.push(JSON.stringify(pg().s));if(undo.length>60)undo.shift();redo=[]}
 function bbox(s){if(s.t==='img')return[s.x,s.y,s.x+s.w,s.y+s.h];if(s.t==='text'){const n=s.tx.split('\n');return[s.x,s.y,s.x+Math.max(...n.map(l=>l.length))*s.z*.55,s.y+n.length*s.z*1.25]}
 const a=s.pts[0],b=s.pts[s.pts.length-1];return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}
 function hit(s,x,y,r){if(s.t==='pen'||s.t==='hl')return s.pts.some(q=>Math.hypot(q[0]-x,q[1]-y)<r+s.w);const b=bbox(s);
 if(s.t==='img'||s.t==='text')return x>b[0]-r&&x<b[2]+r&&y>b[1]-r&&y<b[3]+r;return x>b[0]-r&&x<b[2]+r&&y>b[1]-r&&y<b[3]+r&&!(x>b[0]+r&&x<b[2]-r&&y>b[1]+r&&y<b[3]-r&&s.t!=='line')}
 function erase(x,y){const n=pg().s.length;pg().s=pg().s.filter(s=>!hit(s,x,y,10+size));if(pg().s.length!==n)draw()}
+const touches=new Map();let pid=null,gest=null,hs=false;
+const avg=()=>{const p=[...touches.values()],n=p.length||1;return[p.reduce((a,q)=>a+q[0],0)/n,p.reduce((a,q)=>a+q[1],0)/n,p.length>1?Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]):0]};
+function gstart(){if(!touches.size){gest=null;return}const[mx,my,d]=avg(),r=cv.getBoundingClientRect(),s=sc();gest={d,Z0:Z,gx:(mx-r.left-view.x)/s,gy:(my-r.top-view.y)/s}}
+function gmove(){if(!gest||!touches.size)return;const[mx,my,d]=avg();if(touches.size>1&&gest.d>0)Z=Math.max(.5,Math.min(4,gest.Z0*d/gest.d));
+const r=cv.getBoundingClientRect(),s=sc();view.x=mx-r.left-gest.gx*s;view.y=my-r.top-gest.gy*s;clampView();dirty=true;rp();zui()}
+function finish(){clearTimeout(hold);pid=null;if(drag){drag=null;save();return}if(er){er=false;save();return}if(!cur)return;
+if(cur.t==='lasso'){const p=cur.pts;cur=null;if(p.length>3)sel=pg().s.filter(s=>{const b=sbox(s);return inpoly([(b[0]+b[2])/2,(b[1]+b[3])/2],p)});draw();return}
+if(cur.t==='hl'||cur.t==='pen'||cur.pts.length>1){const s=cur;cur=null;snap();pg().s.push(s);save()}else cur=null;draw()}
 cv.addEventListener('pointerdown',e=>{
-if(e.pointerType==='touch'&&penOnly){ty=e.clientY;tx0=e.clientX;cv.setPointerCapture(e.pointerId);return}
-e.preventDefault();cv.setPointerCapture(e.pointerId);const q=pos(e);
+$('pt').textContent=e.pointerType==='pen'?'✏️ Pencil':e.pointerType==='touch'?'👆 Finger':'🖱 '+e.pointerType;
+if(e.pointerType==='touch'&&penOnly){if(cur||er||drag)return;touches.set(e.pointerId,[e.clientX,e.clientY]);try{cv.setPointerCapture(e.pointerId)}catch(_){}gstart();return}
+e.preventDefault();finish();try{cv.setPointerCapture(e.pointerId)}catch(_){}pid=e.pointerId;const q=pos(e);
 if(tool==='sticker'&&sticker){snap();pg().s.push({t:'text',c:'#000',z:64,x:q[0]-32,y:q[1]-32,tx:sticker});draw();save();return}
 if(tool==='lasso'){const b=sb();if(b){if(Math.hypot(q[0]-b[2]-6,q[1]-b[3]-6)<30){snap();drag={m:'s',o:[b[0],b[1]],d0:Math.max(20,Math.hypot(q[0]-b[0],q[1]-b[1])),c:JSON.parse(JSON.stringify(sel))};return}
 if(q[0]>b[0]-6&&q[0]<b[2]+6&&q[1]>b[1]-6&&q[1]<b[3]+6){snap();drag={m:'m',q0:q,c:JSON.parse(JSON.stringify(sel))};return}}
 sel=[];cur={t:'lasso',pts:[q]};draw();return}
 if(tool==='text'){const t=prompt('Text:');if(t){snap();pg().s.push({t:'text',c:color,z:size*6+14,x:q[0],y:q[1],tx:t});draw();save()}return}
 if(tool==='eraser'){snap();er=true;erase(q[0],q[1]);return}
-cur={t:tool,c:color,w:size,pts:[q]};draw()});
+cur={t:tool,c:color,w:size,pts:[q]};paint()});
 cv.addEventListener('pointermove',e=>{
-if(e.pointerType==='touch'&&penOnly){if(ty!==null){wrap.scrollTop-=e.clientY-ty;wrap.scrollLeft-=e.clientX-tx0;ty=e.clientY;tx0=e.clientX}return}
+if(touches.has(e.pointerId)){touches.set(e.pointerId,[e.clientX,e.clientY]);gmove();return}
+if(e.pointerId!==pid)return;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
 if(drag){const q=pos(e);sel.forEach((s,i)=>{const c=JSON.parse(JSON.stringify(drag.c[i]));
 if(drag.m==='m'){const dx=q[0]-drag.q0[0],dy=q[1]-drag.q0[1];tf(c,(x,y)=>[x+dx,y+dy])}
 else{const o=drag.o,k=Math.max(.1,Math.hypot(q[0]-o[0],q[1]-o[1])/drag.d0);tf(c,(x,y)=>[o[0]+(x-o[0])*k,o[1]+(y-o[1])*k]);if(c.t==='text')c.z*=k;else if(c.t==='img'){c.w*=k;c.h*=k}else c.w=Math.max(1,c.w*k)}
 for(const key in s)delete s[key];Object.assign(s,c)});draw();return}
-if(er){(e.getCoalescedEvents?e.getCoalescedEvents():[e]).forEach(c=>{const q=pos(c);erase(q[0],q[1])});return}
-if(!cur)return;(e.getCoalescedEvents?e.getCoalescedEvents():[e]).forEach(c=>{const q=pos(c);
-if(cur.t==='pen'||cur.t==='hl'||cur.t==='lasso')cur.pts.push(q);else cur.pts[1]=q});draw();
-clearTimeout(hold);if(cur.t==='pen'&&cur.pts.length>8)hold=setTimeout(()=>{if(cur&&cur.t==='pen'){cur.pts=[cur.pts[0],cur.pts[cur.pts.length-1]];cur.t='line';draw()}},600)});
-function end(){ty=null;clearTimeout(hold);if(drag){drag=null;save();return}if(er){er=false;save();return}if(!cur)return;
-if(cur.t==='lasso'){const p=cur.pts;cur=null;if(p.length>3)sel=pg().s.filter(s=>{const b=sbox(s);return inpoly([(b[0]+b[2])/2,(b[1]+b[3])/2],p)});draw();return}
-if(cur.t==='hl'||cur.t==='pen'||cur.pts.length>1){const s=cur;cur=null;snap();undo[undo.length-1]=undo[undo.length-1];pg().s.push(s);save()}else cur=null;draw()}
-cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',()=>{cur=null;er=false;ty=null;draw()});
+if(er){evs.forEach(c=>{const q=pos(c);erase(q[0],q[1])});return}
+if(!cur)return;evs.forEach(c=>{const q=pos(c);if(cur.t==='pen'||cur.t==='hl'||cur.t==='lasso')cur.pts.push(q);else cur.pts[1]=q});rp();
+clearTimeout(hold);if(hs&&cur.t==='pen'&&cur.pts.length>8)hold=setTimeout(()=>{if(cur&&cur.t==='pen'){cur.pts=[cur.pts[0],cur.pts[cur.pts.length-1]];cur.t='line';rp()}},700)});
+const up=e=>{if(touches.delete(e.pointerId)){gstart();return}if(e.pointerId===pid)finish()};
+['pointerup','pointercancel','lostpointercapture'].forEach(n=>cv.addEventListener(n,up));
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+['gesturestart','gesturechange'].forEach(n=>document.addEventListener(n,e=>e.preventDefault()));
+wrap.addEventListener('wheel',e=>{e.preventDefault();if(e.ctrlKey||e.metaKey)zoomTo(Z*Math.exp(-e.deltaY*.01),e.clientX,e.clientY);else{view.x-=e.deltaX;view.y-=e.deltaY;clampView();dirty=true;rp()}},{passive:false});
+document.querySelectorAll('[data-z]').forEach(b=>b.onclick=()=>zoomTo(+b.dataset.z));$('zs').oninput=e=>zoomTo(+e.target.value);
+$('hs').onclick=e=>{hs=!hs;e.target.classList.toggle('on',hs);toast(hs?'Hold the pen still at the end of a stroke to snap to a line':'Snap off')};
 function swap(a,b){if(!a.length)return;b.push(JSON.stringify(pg().s));pg().s=JSON.parse(a.pop());sel=[];draw();save()}
 $('un').onclick=()=>swap(undo,redo);$('re').onclick=()=>swap(redo,undo);
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tool=b.dataset.t;sel=[];sticker='';$('st').value='';draw();document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b))});
@@ -121,7 +150,7 @@ $('sws').style.cssText='display:inline-flex;gap:8px';
 $('cc').oninput=e=>{color=e.target.value;document.querySelectorAll('.sw').forEach(x=>x.classList.remove('on'))};
 $('sz').oninput=e=>size=+e.target.value;
 $('po').onclick=e=>{penOnly=!penOnly;e.target.classList.toggle('on',penOnly);toast(penOnly?'Pencil draws, finger scrolls':'Finger draws too')};
-function go(i){sel=[];D.i=Math.max(0,Math.min(D.pages.length-1,i));undo=[];redo=[];fit();save()}
+function go(i){sel=[];D.i=Math.max(0,Math.min(D.pages.length-1,i));undo=[];redo=[];fit(1);save()}
 $('pv').onclick=()=>go(D.i-1);$('nx').onclick=()=>go(D.i+1);
 $('ad').onclick=()=>{D.pages.splice(D.i+1,0,{s:[],bg:pg().bg});go(D.i+1)};
 $('dl').onclick=()=>{if(D.pages.length<2)return toast('Need at least one page');if(!confirm('Delete this page?'))return;D.pages.splice(D.i,1);go(D.i)};
@@ -145,10 +174,10 @@ $('sx').onclick=()=>{snap();pg().s=pg().s.filter(s=>!sel.includes(s));sel=[];dra
 $('sd').onclick=()=>{snap();const c=sel.map(s=>{const n=JSON.parse(JSON.stringify(s));tf(n,(x,y)=>[x+30,y+30]);return n});pg().s.push(...c);sel=c;draw();save()};
 $('sc').onclick=()=>{snap();sel.forEach(s=>{if(s.c)s.c=color});draw();save()};
 $('st').onchange=e=>{sticker=e.target.value;if(sticker){tool='sticker';sel=[];document.querySelectorAll('[data-t]').forEach(x=>x.classList.remove('on'))}};
-$('zi').onclick=()=>{Z=Math.min(3,Z*1.25);fit()};$('zo').onclick=()=>{Z=Math.max(.5,Z/1.25);fit()};
+
 $('pc').onchange=e=>{pg().pc=e.target.value;draw();save()};
 $('dp').onclick=()=>{D.pages.splice(D.i+1,0,JSON.parse(JSON.stringify(pg())));go(D.i+1)};
-function sw(id){flush();cid=id;D=ld(id);if(!D||!D.pages||!D.pages.length)D={pages:[{s:[],bg:'lined'}],i:0};undo=[];redo=[];sel=[];flush();fit()}
+function sw(id){flush();cid=id;D=ld(id);if(!D||!D.pages||!D.pages.length)D={pages:[{s:[],bg:'lined'}],i:0};undo=[];redo=[];sel=[];flush();fit(1)}
 function txt(id){const d=id===cid?D:ld(id);return d?d.pages.map(p=>p.s.filter(s=>s.t==='text').map(s=>s.tx).join(' ')).join(' ').toLowerCase():''}
 function rl(){flush();const q=$('q').value.toLowerCase(),box=$('ll');box.innerHTML='';
 [...new Set(L.map(n=>n.folder))].sort().forEach(f=>{const items=L.filter(n=>n.folder===f&&(!q||n.name.toLowerCase().includes(q)||txt(n.id).includes(q)));if(!items.length)return;
@@ -157,7 +186,7 @@ items.forEach(n=>{const r=document.createElement('div');r.className='nb'+(n.id==
 [['Rename',()=>{const v=prompt('Name',n.name);if(v){n.name=v;rl()}}],['Folder',()=>{const v=prompt('Folder (blank = none)',n.folder);if(v!==null){n.folder=v.trim();rl()}}],['Delete',()=>{if(L.length<2)return toast('Keep at least one notebook');if(confirm('Delete '+n.name+'?')){localStorage.removeItem('inkwell-nb-'+n.id);L=L.filter(x=>x!==n);if(cid===n.id){cid=null;sw(L[0].id)}rl()}}]].forEach(([l,fn])=>{const b=document.createElement('button');b.textContent=l;b.onclick=fn;r.appendChild(b)});box.appendChild(r)})})}
 $('lib').onclick=()=>{rl();$('libv').hidden=false};$('xl').onclick=()=>{$('libv').hidden=true};$('q').oninput=rl;
 $('nn').onclick=()=>{const v=prompt('Notebook name','Untitled');if(!v)return;sw(mk(v,''));rl()};
-save();addEventListener('resize',fit);fit();
+save();new ResizeObserver(()=>fit()).observe(wrap);fit(1);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 <script src="vendor/pdf.min.js"></script><script src="vendor/jspdf.umd.min.js"></script><script src="vendor/msal-browser.min.js"></script><script src="config.js"></script><script src="extras.js"></script>

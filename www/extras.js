@@ -14,10 +14,10 @@ for(let n=1;n<=pdf.numPages;n++){const p=await pdf.getPage(n),v0=p.getViewport({
 await p.render({canvasContext:c.getContext('2d'),viewport:v}).promise;await kv('put',tag+n,await new Promise(r=>c.toBlob(r,'image/jpeg',.82)));
 const pgd={s:[],bg:'blank',pdf:tag+n,h:Math.round(W*v0.height/v0.width)};if(n===1){D.pages=[pgd];D.i=0;fit()}else D.pages.push(pgd);toast(`PDF page ${n}/${pdf.numPages}`);if(n%5===0)flush()}
 flush();fit();toast('PDF ready – start annotating')}catch(e){toast('Import failed: '+(e.message||e))}}
-async function expPdf(){const {jsPDF}=window.jspdf,keep=D.i;let doc;sel=[];toast('Building PDF…');
+async function expPdf(){const {jsPDF}=window.jspdf,keep=D.i;let doc;sel=[];EXP=true;toast('Building PDF…');
 try{for(let i=0;i<D.pages.length;i++){D.i=i;H=pg().h||1273;if(pg().pdf)await ensureBg(pg().pdf);cv.width=W*2;cv.height=H*2;draw();
 const w=595.28,h=w*H/W,o=h>w?'p':'l';if(!doc)doc=new jsPDF({unit:'pt',format:[w,h],orientation:o});else doc.addPage([w,h],o);doc.addImage(cv.toDataURL('image/jpeg',.88),'JPEG',0,0,w,h)}}
-finally{D.i=keep;fit()}return doc.output('blob')}
+finally{EXP=false;D.i=keep;fit()}return doc.output('blob')}
 const nm=()=>L.find(n=>n.id===cid).name;
 function dl(b,name){const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)}
 const CF=()=>window.INK_CFG||{};
@@ -49,3 +49,6 @@ const b=await expPdf(),name=nm()+'.pdf';
 if(v==='exp')dl(b,name);else if(v==='gd')await toDrive(b,name);else if(v==='od')await toOD(b,name);
 else{const f=new File([b],name,{type:'application/pdf'});if(navigator.canShare&&navigator.canShare({files:[f]}))try{await navigator.share({files:[f]})}catch(e){if(e.name!=='AbortError')dl(b,name)}else dl(b,name)}}
 catch(e){if(e)toast(String(e.message||e).slice(0,90))}};
+
+$('sh').onclick=async()=>{try{sel=[];EXP=true;cv.width=W*2;cv.height=H*2;draw();const b=await new Promise(r=>cv.toBlob(r,'image/png'));EXP=false;fit();const f=new File([b],`page-${D.i+1}.png`,{type:'image/png'});
+if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f]});else dl(b,f.name)}catch(x){EXP=false;fit();if(x&&x.name!=='AbortError')toast('Share failed')}};
