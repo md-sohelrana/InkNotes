@@ -36,3 +36,16 @@ free Apple IDs can only sideload to your own device (expires every 7 days).
 
 ## Notes
 Do not use GoodNotes or Notability names, icons or artwork. Notes are stored in the browser's localStorage on the device.
+
+## v2: PDF, cloud, storage
+- **Import PDF to annotate:** *File → Import PDF*. Each PDF page becomes a notebook page; pen, highlighter, lasso, text etc. all work on top.
+- **Export PDF for assignments:** *File → Export PDF* (download) or *Share PDF…* (Files, Mail, OneDrive/Drive apps). Handwriting is flattened onto the pages.
+- **Storage:** notebooks and PDF pages live in IndexedDB (hundreds of MB), not the 5 MB localStorage. Use *Backup notebook* as a safety copy (PDF backgrounds are not included in the JSON).
+- **Open the app at** `https://<user>.github.io/<repo>/www/` (the repo root redirects there). Pages source can be *Deploy from branch* or *GitHub Actions*.
+
+### Cloud setup (optional, free)
+Without this, *Share PDF…* still saves to iCloud/Files/OneDrive/Drive through the iPad share sheet, and *Import PDF* can pick files from the Files app (including Drive/OneDrive).
+Direct upload needs your own app IDs, put in `www/config.js`:
+1. **Google Drive:** console.cloud.google.com → new project → enable *Google Drive API* → OAuth consent screen (External, *Testing*, add your Google account as test user) → Credentials → *OAuth client ID* → Web application → Authorized JavaScript origin `https://<user>.github.io`. Copy the client ID to `googleClientId`. Scope used: `drive.file` (only files the app creates).
+2. **OneDrive / Microsoft 365:** entra.microsoft.com → App registrations → New → *Accounts in any organizational directory and personal Microsoft accounts* → Redirect URI, platform **Single-page application**: `https://<user>.github.io/<repo>/www/` → copy *Application (client) ID* to `msClientId`. API permission: Microsoft Graph delegated `Files.ReadWrite`. A university/work tenant may require admin consent; if blocked, use *Share PDF…* instead.
+PDFs are uploaded to Drive (root) and to `OneDrive/InkNotes/`. Sign-in popups work best in a normal Safari tab, not in the Home Screen app.
